@@ -1,0 +1,214 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartSight AI | Face Intelligence</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="topbar">
+        <div class="brand">
+            <span class="brand-icon">S</span>
+            <div>
+                <h1>SmartSight AI</h1>
+                <p>Intelligent Vision System</p>
+            </div>
+        </div>
+        <span class="status"><span class="dot"></span> AI SYSTEM</span>
+    </header>
+
+    <main class="container">
+        <section class="hero">
+            <p class="eyebrow">COMPUTER VISION · ARTIFICIAL NEURAL NETWORK</p>
+            <h2>See beyond the ordinary.</h2>
+            <p>Real-time face detection, identity recognition and profile information.</p>
+        </section>
+
+        <section class="dashboard">
+            <div class="camera-card">
+                <div class="card-heading">
+                    <div>
+                        <h3>Live Recognition</h3>
+                        <p>Camera feed with AI detection</p>
+                    </div>
+                    <span class="live"><span class="dot"></span> LIVE</span>
+                </div>
+
+                <div class="video-wrap">
+                    <img id="camera-feed" src="{{ url_for('video_feed') }}"
+                         alt="Live camera feed">
+                    <div id="camera-message" class="camera-message">
+                        Connecting to camera...
+                    </div>
+                </div>
+
+                <p class="hint">Keep your face visible and well lit. Press Stop to end the camera session.</p>
+                <button id="stop-button" class="secondary-button">Stop Camera</button>
+                <button id="start-button" class="primary-button" hidden>Start Camera</button>
+            </div>
+
+            <aside class="info-card">
+                <div class="card-heading">
+                    <div>
+                        <h3>Recognition Results</h3>
+                        <p>Information for recognized people</p>
+                    </div>
+                </div>
+
+                <div id="results">
+                    <div class="empty-state">
+                        <div class="scan-icon">◎</div>
+                        <h4>Waiting for a face</h4>
+                        <p>Detected people and available profile details will appear here.</p>
+                    </div>
+                </div>
+
+                <div class="privacy-note">
+                    <strong>Privacy notice</strong>
+                    <p>This demo identifies registered participants using locally stored data. Use only with their consent.</p>
+                </div>
+            </aside>
+        </section>
+
+        <section class="feature-grid">
+            <article class="feature">
+                <span>01</span>
+                <h3>Face Detection</h3>
+                <p>OpenCV locates faces in each camera frame.</p>
+            </article>
+            <article class="feature">
+                <span>02</span>
+                <h3>ANN Recognition</h3>
+                <p>The trained neural network predicts a registered identity.</p>
+            </article>
+            <article class="feature">
+                <span>03</span>
+                <h3>Profile Display</h3>
+                <p>Saved details appear for recognized people.</p>
+            </article>
+        </section>
+
+        <footer>
+            SmartSight AI · Educational prototype · Python + Flask + OpenCV + ANN
+        </footer>
+    </main>
+
+    <script>
+        const feed = document.getElementById("camera-feed");
+        const message = document.getElementById("camera-message");
+        const results = document.getElementById("results");
+        const stopButton = document.getElementById("stop-button");
+        const startButton = document.getElementById("start-button");
+
+        let polling = null;
+        let cameraActive = true;
+
+        feed.onload = () => {
+            message.style.display = "none";
+        };
+
+        feed.onerror = () => {
+            message.style.display = "flex";
+            message.textContent = "Camera feed unavailable. Check camera connection and server logs.";
+        };
+
+        function escapeHTML(value) {
+            return String(value ?? "Not provided").replace(/[&<>"']/g, char => ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                '"': "&quot;",
+                "'": "&#39;"
+            })[char]);
+        }
+
+        async function refreshResults() {
+            if (!cameraActive) return;
+
+            try {
+                const response = await fetch("/api/results", { cache: "no-store" });
+                const data = await response.json();
+
+                if (!data.people || data.people.length === 0) {
+                    results.innerHTML = `
+                        <div class="empty-state">
+                            <div class="scan-icon">◎</div>
+                            <h4>No face detected yet</h4>
+                            <p>Position a face in front of the camera.</p>
+                        </div>`;
+                    return;
+                }
+
+                results.innerHTML = data.people.map(person => {
+                    const details = person.details || {};
+                    const unknown = person.name === "Unknown Person";
+
+                    return `
+                        <article class="person-result">
+                            <div class="person-heading">
+                                <div class="avatar">${unknown ? "?" : "✓"}</div>
+                                <div>
+                                    <h4>${escapeHTML(person.name)}</h4>
+                                    <p>${unknown ? "No matching identity" : "Registered identity"}</p>
+                                </div>
+                            </div>
+                            <div class="detail-row">
+                                <span>Confidence</span>
+                                <strong>${(Number(person.confidence) * 100).toFixed(1)}%</strong>
+                            </div>
+                            <div class="detail-row">
+                                <span>Age</span>
+                                <strong>${escapeHTML(details.age ?? "Not provided")}</strong>
+                            </div>
+                            <div class="detail-row">
+                                <span>Gender</span>
+                                <strong>${escapeHTML(details.gender ?? "Not provided")}</strong>
+                            </div>
+                            <div class="detail-row">
+                                <span>Occupation</span>
+                                <strong>${escapeHTML(details.occupation ?? "Not provided")}</strong>
+                            </div>
+                        </article>`;
+                }).join("");
+            } catch (error) {
+                console.error("Could not retrieve recognition results:", error);
+            }
+        }
+
+        function startCamera() {
+            cameraActive = true;
+            feed.src = "/video_feed?t=" + Date.now();
+            feed.style.display = "block";
+            message.style.display = "flex";
+            message.textContent = "Connecting to camera...";
+            stopButton.hidden = false;
+            startButton.hidden = true;
+            polling = setInterval(refreshResults, 1000);
+        }
+
+        function stopCamera() {
+            cameraActive = false;
+            feed.src = "";
+            feed.style.display = "none";
+            message.style.display = "flex";
+            message.textContent = "Camera feed stopped. Click Start Camera to reconnect.";
+            stopButton.hidden = true;
+            startButton.hidden = false;
+
+            if (polling) clearInterval(polling);
+            results.innerHTML = `
+                <div class="empty-state">
+                    <h4>Camera stopped</h4>
+                    <p>Restart the camera to continue recognition.</p>
+                </div>`;
+        }
+
+        stopButton.addEventListener("click", stopCamera);
+        startButton.addEventListener("click", startCamera);
+
+        polling = setInterval(refreshResults, 1000);
+    </script>
+</body>
+</html>

@@ -1,6 +1,33 @@
-.venv/
+
+# Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyd
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Personal face images and dataset
 data/faces/
+data/person_details.json
+
+# Trained models
 models/
+*.joblib
+*.pkl
+
+# Secrets and environment variables
 .env
+.env.*
+!.env.example
+
+# IDE and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
